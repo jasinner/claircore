@@ -9,10 +9,10 @@ import (
 	"github.com/quay/claircore/aws"
 	"github.com/quay/claircore/debian"
 	"github.com/quay/claircore/libvuln/driver"
+	"github.com/quay/claircore/photon"
 	"github.com/quay/claircore/python"
 	"github.com/quay/claircore/rhel"
 	"github.com/quay/claircore/ubuntu"
-	"github.com/quay/claircore/photon"
 )
 
 const (
@@ -71,7 +71,7 @@ var defaultMatchers = []driver.Matcher{
 	&debian.Matcher{},
 	&python.Matcher{},
 	&ubuntu.Matcher{},
-	&rhel.Matcher{},
+	rhel.NewMatcher(nil),
 	&photon.Matcher{},
 }
 
