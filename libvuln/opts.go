@@ -65,15 +65,7 @@ type Opts struct {
 // defaultMacheter is a variable containing
 // all the matchers libvuln will use to match
 // index records to vulnerabilities.
-var defaultMatchers = []driver.Matcher{
-	&alpine.Matcher{},
-	&aws.Matcher{},
-	&debian.Matcher{},
-	&python.Matcher{},
-	&ubuntu.Matcher{},
-	rhel.NewMatcher(nil),
-	&photon.Matcher{},
-}
+var defaultMatchers []driver.Matcher
 
 // parse is an internal method for constructing
 // the necessary Updaters and Matchers for Libvuln
@@ -90,6 +82,17 @@ func (o *Opts) parse(ctx context.Context) error {
 	}
 	if o.MaxConnPool == 0 {
 		o.MaxConnPool = DefaultMaxConnPool
+	}
+
+	// initialize default matchers
+	defaultMatchers = []driver.Matcher{
+		&alpine.Matcher{},
+		&aws.Matcher{},
+		&debian.Matcher{},
+		&python.Matcher{},
+		&ubuntu.Matcher{},
+		rhel.NewMatcher(ctx, nil),
+		&photon.Matcher{},
 	}
 
 	// merge default matchers with any out-of-tree specified
