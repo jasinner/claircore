@@ -1,0 +1,51 @@
+---
+name: Prepare Release
+
+on:
+  push:
+    tags:
+      - v0.*
+
+jobs:
+  create:
+    name: Create Release
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: SetupTag
+        run: |
+          : "${tag:=${GITHUB_REF#refs/tags/}}"
+          cat <<.
+          ::set-env name=CLAIRCORE_VERSION::${tag}
+          .
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: ChangeLog
+        shell: bash
+        run: |
+          curl -o git-chglog -L https://github.com/git-chglog/git-chglog/releases/download/0.9.1/git-chglog_linux_amd64
+          chmod u+x git-chglog
+          tag=`basename ${{ github.ref }}`
+          echo "creating change log for tag: $tag"
+          chglog="$(./git-chglog ${tag})"
+          chglog="${chglog//'%'/'%25'}"
+          chglog="${chglog//$'\n'/'%0A'}"
+          chglog="${chglog//$'\r'/'%0D'}"
+          cat <<.
+          ::set-env name=CHANGELOG::${chglog}
+          .
+      - name: ChangeLogSanityCheck
+        run: |
+          echo '${{ env.CHANGELOG }}'
+      - name: Create Release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ env.CLAIRCORE_VERSION}} Release
+          body: |
+            ${{ env.CHANGELOG }}
+          draft: true
+          prerelease: ${{ contains(env.CLAIR_VERSION, 'alpha') || contains(env.CLAIR_VERSION, 'beta') || contains(env.CLAIR_VERSION, 'rc') }}
