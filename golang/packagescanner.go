@@ -1,14 +1,15 @@
-// Package python contains components for interrogating python packages in
+// Package golang contains components for interrogating golang binaries in
 // container layers.
-package python
+package golang
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/trace"
@@ -44,13 +45,14 @@ func (*Scanner) Kind() string { return "package" }
 
 //Find global variable backing runtime.Version
 //https://blog.filippo.io/reproducing-go-binaries-byte-by-byte/
-func runtimeVersion(file string) string {
-	cmdeGrep := exec.Command("egrep", "-a", "-o", "go[0-9\\.]+", os.Args[1])
-	cmdSort := exec.Command("sort", "-u", "-n")
+func runtimeVersion(r io.Reader) string {
+	cmdeGrep := exec.Command("egrep", "-a", "-o", "go[0-9]+\\.[0-9]+\\.[0-9]+")
+	cmdSort := exec.Command("sort", "-u")
 
 	reader, writer := io.Pipe()
 	var buf bytes.Buffer
 
+	cmdeGrep.Stdin = r
 	cmdeGrep.Stdout = writer
 	cmdSort.Stdin = reader
 	cmdSort.Stdout = &buf
@@ -64,11 +66,11 @@ func runtimeVersion(file string) string {
 	cmdSort.Wait()
 	reader.Close()
 
-	return buf.String()
+	version := strings.TrimPrefix(buf.String(), "go")
+	return strings.TrimSpace(version)
 }
 
 // Scan attempts to find elf binaries with a global variable backing runtime.Version
-//
 // A return of (nil, nil) is expected if there's nothing found.
 func (ps *Scanner) Scan(ctx context.Context, layer *claircore.Layer) ([]*claircore.Package, error) {
 	defer trace.StartRegion(ctx, "Scanner.Scan").End()
@@ -104,22 +106,27 @@ func (ps *Scanner) Scan(ctx context.Context, layer *claircore.Layer) ([]*clairco
 	for h, err = tr.Next(); err == nil; h, err = tr.Next() {
 		n, err := filepath.Rel("/", filepath.Join("/", h.Name))
 		if err != nil {
+			fmt.Printf("error reading %s\n", n)
 			return nil, err
 		}
 
-		readerAt, err := os.Open(n)
-		f := readerAt(n)
+		rd := bufio.NewReader(tr)
 		var ident [16]uint8
-		f.ReadAt(ident[0:], 0)
+		rd.Read(ident[0:])
 		if ident[0] != '\x7f' || ident[1] != 'E' || ident[2] != 'L' || ident[3] != 'F' {
 			continue
 		}
-		goVersion := runtimeVersion(n)
 
+		goVersion := runtimeVersion(tr)
+		if goVersion == "" {
+			continue
+		}
+
+		absPath := filepath.Join("/", n)
 		ret = append(ret, &claircore.Package{
-			Name:           strings.ToLower(hdr.Get("Name")),
+			Name:           absPath,
 			Version:        goVersion,
-			PackageDB:      "golang:" + filepath.Join(n, "..", ".."),
+			PackageDB:      "golang:" + filepath.Dir(absPath),
 			Kind:           claircore.SOURCE,
 			RepositoryHint: "nvd-golang",
 		})
