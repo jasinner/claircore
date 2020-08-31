@@ -45,6 +45,8 @@ func (*Scanner) Kind() string { return "package" }
 
 //Find global variable backing runtime.Version
 //https://blog.filippo.io/reproducing-go-binaries-byte-by-byte/
+// TODO get go version without egrep using something like:
+// https://github.com/golang/go/blob/master/src/cmd/go/internal/version/version.go#L153
 func runtimeVersion(r io.Reader) string {
 	cmdeGrep := exec.Command("egrep", "-a", "-o", "go[0-9]+\\.[0-9]+\\.[0-9]+")
 	cmdSort := exec.Command("sort", "-u")
